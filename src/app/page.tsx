@@ -20,32 +20,30 @@ import {
   Layers,
 } from 'lucide-react';
 
-async function getHomeData() {
-  try {
-    await connectDB();
-    const categories = await Category.find({}).lean();
-    let featuredProducts = await Product.find({ featured: true, isDeleted: { $ne: true } })
-      .limit(8)
-      .lean();
-
-    if (featuredProducts.length === 0) {
-      featuredProducts = await Product.find({ isDeleted: { $ne: true } })
-        .limit(8)
-        .lean();
-    }
-
-    return {
-      categories: JSON.parse(JSON.stringify(categories)),
-      featuredProducts: JSON.parse(JSON.stringify(featuredProducts)),
-    };
-  } catch (error) {
-    console.error('Error loading home data:', error);
-    return { categories: [], featuredProducts: [] };
-  }
-}
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default async function HomePage() {
-  const { categories, featuredProducts } = await getHomeData();
+  await connectDB();
+
+  const filter: any = { isDeleted: { $ne: true } };
+
+  // Fetch featured products, with fallback to any active products
+  let productsRaw = await Product.find({ ...filter, featured: true })
+    .sort({ createdAt: -1 })
+    .limit(8)
+    .lean();
+
+  if (!productsRaw || productsRaw.length === 0) {
+    productsRaw = await Product.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(8)
+      .lean();
+  }
+
+  const featuredProducts = JSON.parse(JSON.stringify(productsRaw || []));
+  const categoriesRaw = await Category.find({}).lean();
+  const categories = JSON.parse(JSON.stringify(categoriesRaw || []));
 
   const curatedCategories = [
     {
