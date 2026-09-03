@@ -6,6 +6,11 @@ import Image from 'next/image';
 import { CheckCircle2, ShoppingBag, Package, MapPin, Printer, ArrowRight } from 'lucide-react';
 import { notFound } from 'next/navigation';
 
+import mongoose from 'mongoose';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 interface OrderSuccessPageProps {
   params: Promise<{ id: string }>;
 }
@@ -17,9 +22,17 @@ export const metadata = {
 
 export default async function OrderSuccessPage({ params }: OrderSuccessPageProps) {
   const { id } = await params;
+  if (!id) notFound();
+
   await connectDB();
 
-  const order = await Order.findById(id).lean();
+  let order = null;
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    order = await Order.findById(id).lean();
+  }
+  if (!order) {
+    order = await Order.findOne({ orderNumber: id }).lean();
+  }
   if (!order) {
     notFound();
   }

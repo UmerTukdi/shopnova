@@ -1,21 +1,28 @@
 import { connectDB } from '@/lib/db';
 import Order from '@/models/Order';
+import User from '@/models/User'; // Explicit import to prevent MissingSchemaError during serverless cold start
+import { getUserFromCookies } from '@/lib/auth';
 import { formatPrice } from '@/lib/utils';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
   Package,
   MapPin,
-  CreditCard,
   ChevronLeft,
   CheckCircle2,
-  ShieldCheck,
   Clock,
   Sparkles,
+  ShieldAlert,
+  ShoppingBag,
+  ArrowRight,
 } from 'lucide-react';
-import { notFound } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import OrderInvoiceButton from './OrderInvoiceButton';
 import { Suspense } from 'react';
+import mongoose from 'mongoose';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 interface OrderDetailPageProps {
   params: Promise<{ id: string }>;
@@ -30,14 +37,105 @@ const TIMELINE_STEPS = ['PENDING', 'PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED']
 
 export default async function OrderDetailPage({ params }: OrderDetailPageProps) {
   const { id } = await params;
-  await connectDB();
 
-  const order = await Order.findById(id).populate('user', 'name email phone').lean();
-  if (!order) {
-    notFound();
+  if (!id) {
+    return (
+      <div className="max-w-md mx-auto py-20 px-4 text-center">
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 space-y-4">
+          <Package className="w-12 h-12 text-slate-400 mx-auto" />
+          <h2 className="text-xl font-bold text-slate-900">Order ID Missing</h2>
+          <p className="text-xs text-slate-500">Please select an order from your order history.</p>
+          <Link
+            href="/orders"
+            className="inline-flex items-center gap-1.5 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow transition-colors"
+          >
+            Go to My Orders
+          </Link>
+        </div>
+      </div>
+    );
   }
 
-  const parsedOrder = JSON.parse(JSON.stringify(order));
+  // 1. Verify User Authentication
+  const authUser = await getUserFromCookies();
+  if (!authUser) {
+    redirect(`/login?redirect=/orders/${encodeURIComponent(id)}`);
+  }
+
+  await connectDB();
+
+  // 2. Safely Query Order by ObjectId or orderNumber (prevents Mongoose CastError 500s)
+  let orderRaw = null;
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    orderRaw = await Order.findById(id).populate('user', 'name email phone').lean();
+  }
+
+  if (!orderRaw) {
+    orderRaw = await Order.findOne({ orderNumber: id }).populate('user', 'name email phone').lean();
+  }
+
+  // 3. Handle Order Not Found Gracefully
+  if (!orderRaw) {
+    return (
+      <div className="max-w-md mx-auto py-20 px-4 text-center">
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+            <Package className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900">Order Not Found</h2>
+          <p className="text-xs text-slate-500">
+            We could not find an order matching reference <strong className="font-mono text-slate-800">{id}</strong>.
+          </p>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <Link
+              href="/orders"
+              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow transition-colors"
+            >
+              View My Orders
+            </Link>
+            <Link
+              href="/products"
+              className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors"
+            >
+              Continue Shopping
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const parsedOrder = JSON.parse(JSON.stringify(orderRaw));
+
+  // 4. Authorization Check: Owner or Admin
+  const orderUserId = parsedOrder.user?._id?.toString() || parsedOrder.user?.toString();
+  const isOwner = orderUserId === authUser.userId;
+  const isAdmin = authUser.role === 'admin';
+
+  if (!isOwner && !isAdmin) {
+    return (
+      <div className="max-w-md mx-auto py-20 px-4 text-center">
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900">Access Restricted</h2>
+          <p className="text-xs text-slate-500">
+            You do not have permission to view this order. You are logged in as{' '}
+            <strong className="text-slate-800">{authUser.email}</strong>.
+          </p>
+          <Link
+            href="/orders"
+            className="inline-flex items-center gap-1.5 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow transition-colors"
+          >
+            Back to My Orders
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // 5. Status & Customer Details
   const currentStatus = (parsedOrder.orderStatus || 'PENDING').toUpperCase();
   const isCancelled = currentStatus === 'CANCELLED';
   const isPaid = parsedOrder.paymentStatus === 'PAID';
@@ -45,8 +143,9 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
   const customerName =
     parsedOrder.shippingAddress?.fullName ||
     parsedOrder.user?.name ||
+    authUser.name ||
     'Valued Customer';
-  const customerEmail = parsedOrder.user?.email || 'customer@shopnova.com';
+  const customerEmail = parsedOrder.user?.email || authUser.email || 'customer@shopnova.com';
   const customerPhone =
     parsedOrder.shippingAddress?.phone ||
     parsedOrder.user?.phone ||
@@ -155,13 +254,15 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {parsedOrder.items.map((item: any, idx: number) => (
+                {parsedOrder.items && parsedOrder.items.map((item: any, idx: number) => (
                   <tr key={idx} className="hover:bg-slate-50/50">
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="relative w-10 h-10 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0 print:hidden">
-                          <Image src={item.image} alt={item.name} fill className="object-contain p-1" />
-                        </div>
+                        {item.image && (
+                          <div className="relative w-10 h-10 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0 print:hidden">
+                            <Image src={item.image} alt={item.name || 'Product'} fill className="object-contain p-1" />
+                          </div>
+                        )}
                         <span className="font-bold text-slate-900 line-clamp-1">{item.name}</span>
                       </div>
                     </td>
@@ -217,7 +318,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
               <span className="font-semibold text-slate-900">
                 {parsedOrder.paymentResult?.razorpayPaymentId?.startsWith('pay_mock_')
                   ? 'Mock Payment (Dev Mode)'
-                  : 'Razorpay Test Gateway'}
+                  : 'Razorpay Gateway'}
               </span>
             </div>
             {parsedOrder.paymentResult?.razorpayPaymentId && (

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
 import { formatPrice } from '@/lib/utils';
-import { Package, ChevronRight, ShoppingBag, Clock, Loader2, ArrowRight } from 'lucide-react';
+import { Package, ChevronRight, ShoppingBag, Clock, Loader2, ArrowRight, Printer } from 'lucide-react';
 
 export default function OrdersPage() {
   const { user } = useAuth();
@@ -201,13 +201,23 @@ export default function OrdersPage() {
                     )}
                   </div>
 
-                  <Link
-                    href={`/orders/${order._id}`}
-                    className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow transition-all flex-shrink-0"
-                  >
-                    <span>View Order &amp; Receipt</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </Link>
+                  <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                    <Link
+                      href={`/orders/${order._id}`}
+                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow transition-all"
+                    >
+                      <span>View Order</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </Link>
+
+                    <Link
+                      href={`/orders/${order._id}?print=true`}
+                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs shadow-sm transition-all"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Order Receipt</span>
+                    </Link>
+                  </div>
                 </div>
               </div>
             );

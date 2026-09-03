@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Order from '@/models/Order';
+import User from '@/models/User'; // Prevent MissingSchemaError in serverless cold starts
 import { getUserFromCookies } from '@/lib/auth';
 import mongoose from 'mongoose';
 
@@ -18,20 +19,41 @@ export async function GET(
     }
 
     const { id } = await params;
-    await connectDB();
-
-    let order = null;
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      order = await Order.findOne({ _id: id, user: user.userId });
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'Order ID is required' },
+        { status: 400 }
+      );
     }
 
-    if (!order) {
-      order = await Order.findOne({ orderNumber: id, user: user.userId });
+    await connectDB();
+
+    const isObjectId = mongoose.Types.ObjectId.isValid(id);
+    let order = null;
+
+    if (user.role === 'admin') {
+      if (isObjectId) {
+        order = await Order.findById(id).populate('user', 'name email phone').lean();
+      }
+      if (!order) {
+        order = await Order.findOne({ orderNumber: id }).populate('user', 'name email phone').lean();
+      }
+    } else {
+      if (isObjectId) {
+        order = await Order.findOne({ _id: id, user: user.userId })
+          .populate('user', 'name email phone')
+          .lean();
+      }
+      if (!order) {
+        order = await Order.findOne({ orderNumber: id, user: user.userId })
+          .populate('user', 'name email phone')
+          .lean();
+      }
     }
 
     if (!order) {
       return NextResponse.json(
-        { success: false, error: 'Order not found' },
+        { success: false, error: 'Order not found or unauthorized' },
         { status: 404 }
       );
     }
