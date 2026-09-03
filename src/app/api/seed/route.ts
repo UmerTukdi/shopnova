@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/db';
 import User from '@/models/User';
 import Category from '@/models/Category';
 import Product from '@/models/Product';
+import Address from '@/models/Address';
 import { hashPassword } from '@/lib/auth';
 
 // Helper to sanitize any markdown image URLs: [https://...](https://...) -> https://...
@@ -469,6 +470,51 @@ export async function POST(req: Request) {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
+    // 1b. Seed Sample Saved Addresses
+    await Address.findOneAndUpdate(
+      { user: customerUser._id, label: 'Home' },
+      {
+        $set: {
+          user: customerUser._id,
+          fullName: 'John Customer',
+          phone: '+91 9876543210',
+          label: 'Home',
+          addressLine1: '123 Innovation Way, Tech Park',
+          addressLine2: 'Flat 4B, Tower 2',
+          addressLine: '123 Innovation Way, Tech Park',
+          apartment: 'Flat 4B, Tower 2',
+          city: 'Bengaluru',
+          state: 'Karnataka',
+          postalCode: '560100',
+          country: 'India',
+          isDefault: true,
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    await Address.findOneAndUpdate(
+      { user: demoUser._id, label: 'Home' },
+      {
+        $set: {
+          user: demoUser._id,
+          fullName: 'Alex Johnson',
+          phone: '+91 9123456789',
+          label: 'Home',
+          addressLine1: '78 Silicon Avenue, Koramangala',
+          addressLine2: 'Apt 101',
+          addressLine: '78 Silicon Avenue, Koramangala',
+          apartment: 'Apt 101',
+          city: 'Bengaluru',
+          state: 'Karnataka',
+          postalCode: '560034',
+          country: 'India',
+          isDefault: true,
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
     // 2. Seed Categories (Idempotent upsert by slug)
     for (const cat of categoriesData) {
       await Category.findOneAndUpdate(
@@ -531,6 +577,7 @@ export async function POST(req: Request) {
     const categoriesCount = await Category.countDocuments({});
     const productsCount = await Product.countDocuments({ isDeleted: false });
     const usersCount = await User.countDocuments({});
+    const addressesCount = await Address.countDocuments({});
 
     return NextResponse.json({
       success: true,
@@ -538,6 +585,7 @@ export async function POST(req: Request) {
       categoriesCount,
       productsCount,
       usersCount,
+      addressesCount,
       accounts: [
         { email: adminUser.email, role: 'admin', password: 'Admin@123' },
         { email: customerUser.email, role: 'user', password: 'User@123' },

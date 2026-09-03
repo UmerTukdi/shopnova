@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Address from '@/models/Address';
 import { getUserFromCookies } from '@/lib/auth';
+import mongoose from 'mongoose';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET() {
   try {
@@ -14,7 +18,16 @@ export async function GET() {
     }
 
     await connectDB();
-    const addresses = await Address.find({ user: user.userId }).sort({ isDefault: -1, createdAt: -1 });
+
+    const userObjId = mongoose.Types.ObjectId.isValid(user.userId)
+      ? new mongoose.Types.ObjectId(user.userId)
+      : user.userId;
+
+    const addresses = await Address.find({
+      $or: [{ user: userObjId }, { user: user.userId }],
+    })
+      .sort({ isDefault: -1, createdAt: -1 })
+      .lean();
 
     return NextResponse.json({ success: true, addresses });
   } catch (error: any) {
@@ -64,18 +77,24 @@ export async function POST(req: Request) {
 
     await connectDB();
 
+    const userObjId = mongoose.Types.ObjectId.isValid(user.userId)
+      ? new mongoose.Types.ObjectId(user.userId)
+      : user.userId;
+
+    const userMatch = { $or: [{ user: userObjId }, { user: user.userId }] };
+
     // Check if user has any existing addresses
-    const existingCount = await Address.countDocuments({ user: user.userId });
+    const existingCount = await Address.countDocuments(userMatch);
     const shouldBeDefault = isDefault || existingCount === 0;
 
     if (shouldBeDefault) {
-      await Address.updateMany({ user: user.userId }, { isDefault: false });
+      await Address.updateMany(userMatch, { isDefault: false });
     }
 
     const validLabel = ['Home', 'Work', 'Other'].includes(label) ? label : 'Home';
 
     const address = await Address.create({
-      user: user.userId,
+      user: userObjId,
       fullName: fullName.trim(),
       phone: phone.trim(),
       label: validLabel,

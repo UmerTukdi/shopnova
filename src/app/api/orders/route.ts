@@ -5,6 +5,10 @@ import Cart from '@/models/Cart';
 import Product from '@/models/Product';
 import Address from '@/models/Address';
 import { getUserFromCookies } from '@/lib/auth';
+import mongoose from 'mongoose';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET() {
   try {
@@ -133,10 +137,16 @@ export async function POST(req: Request) {
       }
     }
 
+    const userObjId = mongoose.Types.ObjectId.isValid(user.userId)
+      ? new mongoose.Types.ObjectId(user.userId)
+      : user.userId;
+
+    const userMatch = { $or: [{ user: userObjId }, { user: user.userId }] };
+
     // 2. Resolve Shipping Address
     let shippingAddressData = customAddress;
     if (!shippingAddressData && addressId) {
-      const dbAddress = await Address.findOne({ _id: addressId, user: user.userId });
+      const dbAddress = await Address.findOne({ _id: addressId, ...userMatch });
       if (!dbAddress) {
         return NextResponse.json(
           { success: false, error: 'Selected address not found' },
@@ -160,6 +170,42 @@ export async function POST(req: Request) {
         { success: false, error: 'Shipping address is required' },
         { status: 400 }
       );
+    }
+
+    // Auto-persist shipping address in Address collection if not already saved
+    if (customAddress) {
+      try {
+        const line1 = (customAddress.addressLine1 || customAddress.addressLine || '').trim();
+        const pCode = (customAddress.postalCode || '').trim();
+        if (line1 && pCode) {
+          const existing = await Address.findOne({
+            ...userMatch,
+            $or: [{ addressLine1: line1 }, { addressLine: line1 }],
+            postalCode: pCode,
+          });
+
+          if (!existing) {
+            const hasAny = await Address.countDocuments(userMatch);
+            await Address.create({
+              user: userObjId,
+              fullName: (customAddress.fullName || '').trim(),
+              phone: (customAddress.phone || '').trim(),
+              label: 'Home',
+              addressLine1: line1,
+              addressLine2: (customAddress.addressLine2 || customAddress.apartment || '').trim(),
+              addressLine: line1,
+              apartment: (customAddress.addressLine2 || customAddress.apartment || '').trim(),
+              city: (customAddress.city || '').trim(),
+              state: (customAddress.state || '').trim(),
+              postalCode: pCode,
+              country: (customAddress.country || 'India').trim(),
+              isDefault: hasAny === 0,
+            });
+          }
+        }
+      } catch (addrSaveErr) {
+        console.error('Auto-saving shipping address error:', addrSaveErr);
+      }
     }
 
     // 3. Calculate Tax & Shipping Server-Side

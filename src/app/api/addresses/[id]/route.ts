@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Address from '@/models/Address';
 import { getUserFromCookies } from '@/lib/auth';
+import mongoose from 'mongoose';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function PATCH(
   req: Request,
@@ -21,7 +25,13 @@ export async function PATCH(
 
     await connectDB();
 
-    const address = await Address.findOne({ _id: id, user: user.userId });
+    const userObjId = mongoose.Types.ObjectId.isValid(user.userId)
+      ? new mongoose.Types.ObjectId(user.userId)
+      : user.userId;
+
+    const userMatch = { $or: [{ user: userObjId }, { user: user.userId }] };
+
+    const address = await Address.findOne({ _id: id, ...userMatch });
     if (!address) {
       return NextResponse.json(
         { success: false, error: 'Address not found or unauthorized' },
@@ -30,7 +40,7 @@ export async function PATCH(
     }
 
     if (body.isDefault) {
-      await Address.updateMany({ user: user.userId }, { isDefault: false });
+      await Address.updateMany(userMatch, { isDefault: false });
     }
 
     if (body.addressLine1 !== undefined) {
@@ -88,7 +98,13 @@ export async function DELETE(
     const { id } = await params;
     await connectDB();
 
-    const deleted = await Address.findOneAndDelete({ _id: id, user: user.userId });
+    const userObjId = mongoose.Types.ObjectId.isValid(user.userId)
+      ? new mongoose.Types.ObjectId(user.userId)
+      : user.userId;
+
+    const userMatch = { $or: [{ user: userObjId }, { user: user.userId }] };
+
+    const deleted = await Address.findOneAndDelete({ _id: id, ...userMatch });
     if (!deleted) {
       return NextResponse.json(
         { success: false, error: 'Address not found or unauthorized' },
