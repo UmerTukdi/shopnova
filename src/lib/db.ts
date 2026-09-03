@@ -1,11 +1,5 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/shopnova';
-
-if (!MONGODB_URI) {
-  throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
-}
-
 interface MongooseCache {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
@@ -22,16 +16,25 @@ if (!global.mongooseCache) {
 }
 
 export async function connectDB() {
-  if (cached.conn) {
+  const uri = process.env.MONGODB_URI || (process.env.NODE_ENV === 'production' ? '' : 'mongodb://127.0.0.1:27017/shopnova');
+
+  if (!uri) {
+    throw new Error(
+      'MONGODB_URI environment variable is missing. Please define MONGODB_URI in your Vercel Project Settings > Environment Variables (e.g., mongodb+srv://<user>:<password>@cluster.mongodb.net/shopnova).'
+    );
+  }
+
+  if (cached.conn && cached.conn.connection.readyState === 1) {
     return cached.conn;
   }
 
   if (!cached.promise) {
-    const opts = {
+    const opts: mongoose.ConnectOptions = {
       bufferCommands: false,
+      serverSelectionTimeoutMS: 10000, // 10s timeout to prevent hanging on serverless
     };
 
-    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongooseInstance) => {
+    cached.promise = mongoose.connect(uri, opts).then((mongooseInstance) => {
       return mongooseInstance;
     });
   }
