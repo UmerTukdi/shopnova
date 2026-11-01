@@ -1,8 +1,8 @@
-# ShopNova — Production-Quality Full-Stack E-Commerce Platform
+# ShopNova — Full-Stack E-Commerce Application
 
-ShopNova is a production-grade, full-stack e-commerce web application built using **Next.js 16 (App Router)**, **React 19**, **TypeScript**, **MongoDB (Mongoose)**, **Razorpay Payment Gateway**, and **Tailwind CSS v4**.
+ShopNova is a full-stack e-commerce application built with **Next.js 16 (App Router)**, **React 19**, **TypeScript**, **MongoDB (Mongoose)**, **Razorpay integration**, and **Tailwind CSS v4**.
 
-It provides a seamless, secure shopping experience for customers and a comprehensive management control center for store administrators.
+The project brings together a customer storefront, authentication, cart and checkout flows, order management, and an admin control center. It is documented as a portfolio and development project; the included demo OTP and test/mock payment configuration are not production-ready.
 
 ---
 
@@ -181,7 +181,7 @@ Set via `PAYMENT_MODE` environment variable:
 MONGODB_URI=mongodb://127.0.0.1:27017/shopnova
 
 # JWT Authentication
-JWT_SECRET=shopnova_production_secret_key_change_in_prod
+JWT_SECRET=replace_with_a_long_random_secret
 
 # Payment Mode Configuration ('razorpay' | 'mock')
 PAYMENT_MODE=razorpay
@@ -202,7 +202,7 @@ npm install
 ```
 
 ### 2. Configure Environment
-Copy `.env.local.example` or create `.env.local` with the variables above.
+Create `.env.local` in the repository root and add the variables above. Keep this file local; it is ignored by Git.
 
 ### 3. Seed Database
 Populate MongoDB with default accounts, product catalog across 5 categories, sample reviews, addresses, and historical orders:
